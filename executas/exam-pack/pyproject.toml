@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tool-dev-exam-pack"
+name = "tool-brightlabs-fathima-exam-pack-gp65mmhm"
 version = "0.1.1"
 description = "Executa for the exam-pack Anna App"
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ dependencies = ["executa-sdk>=0.1.0"]
 executa-sdk = { path = "../../sdk/python", editable = true }
 
 [project.scripts]
-"tool-dev-exam-pack" = "exam_pack_plugin:main"
+"tool-brightlabs-fathima-exam-pack-gp65mmhm" = "exam_pack_plugin:main"
 
 [tool.setuptools]
 py-modules = ["exam_pack_plugin"]
