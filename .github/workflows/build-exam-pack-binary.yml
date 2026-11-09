@@ -1,0 +1,125 @@
+
+name: Build Exam Pack binaries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  EXECUTA_DIR: executas/exam-pack
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tool_id: ${{ steps.meta.outputs.tool_id }}
+      version: ${{ steps.meta.outputs.version }}
+      slug: ${{ steps.meta.outputs.slug }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          data = json.loads(
+              (Path("executas/exam-pack") / "executa.json").read_text("utf-8")
+          )
+
+          tool_id = data["tool_id"]
+          version = data.get("version") or "0.0.0"
+          slug = data.get("slug") or "exam-pack"
+          tag = f"{slug}-v{version}"
+
+          print(f"tool_id={tool_id}")
+          print(f"version={version}")
+          print(f"slug={slug}")
+          print(f"tag={tag}")
+          PY
+
+  build:
+    needs: meta
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-15
+          - platform: darwin-x86_64
+            os: macos-15-intel
+          - platform: linux-x86_64
+            os: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build binary archive
+        working-directory: ${{ env.EXECUTA_DIR }}
+        env:
+          TOOL_ID: ${{ needs.meta.outputs.tool_id }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          chmod +x package_binary.sh
+          ./package_binary.sh
+          expected="dist-anna/$TOOL_ID-$PLATFORM.tar.gz"
+          test -f "$expected"
+
+      - name: Write SHA256 file
+        working-directory: ${{ env.EXECUTA_DIR }}
+        env:
+          TOOL_ID: ${{ needs.meta.outputs.tool_id }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          archive="dist-anna/$TOOL_ID-$PLATFORM.tar.gz"
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$archive" > "$archive.sha256"
+          else
+            sha256sum "$archive" > "$archive.sha256"
+          fi
+          cat "$archive.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.meta.outputs.tool_id }}-${{ matrix.platform }}
+          path: |
+            ${{ env.EXECUTA_DIR }}/dist-anna/${{ needs.meta.outputs.tool_id }}-${{ matrix.platform }}.tar.gz
+            ${{ env.EXECUTA_DIR }}/dist-anna/${{ needs.meta.outputs.tool_id }}-${{ matrix.platform }}.tar.gz.sha256
+
+  release:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: |
+          find release-assets -type f -maxdepth 1 -print | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.slug }} v${{ needs.meta.outputs.version }}
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: release-assets/*
