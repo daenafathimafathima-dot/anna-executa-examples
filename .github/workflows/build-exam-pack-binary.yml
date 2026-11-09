@@ -74,6 +74,7 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           chmod +x package_binary.sh
+         python -c "from pathlib import Path; p=Path('package_binary.sh'); p.write_bytes(p.read_bytes().replace(b'\r\n', b'\n').replace(b'\r', b'\n'))"
           ./package_binary.sh
           expected="dist-anna/$TOOL_ID-$PLATFORM.tar.gz"
           test -f "$expected"
